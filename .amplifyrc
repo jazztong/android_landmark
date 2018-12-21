@@ -1,0 +1,14 @@
+{
+    "providers": {
+        "awscloudformation": {
+            "AuthRoleName": "androidlandmark-20181221145250-authRole",
+            "UnauthRoleArn": "arn:aws:iam::492032958403:role/androidlandmark-20181221145250-unauthRole",
+            "AuthRoleArn": "arn:aws:iam::492032958403:role/androidlandmark-20181221145250-authRole",
+            "Region": "us-east-1",
+            "DeploymentBucketName": "androidlandmark-20181221145250-deployment",
+            "UnauthRoleName": "androidlandmark-20181221145250-unauthRole",
+            "StackName": "androidlandmark-20181221145250",
+            "StackId": "arn:aws:cloudformation:us-east-1:492032958403:stack/androidlandmark-20181221145250/094ecbf0-04ed-11e9-8a86-0a9fca2e6786"
+        }
+    }
+}

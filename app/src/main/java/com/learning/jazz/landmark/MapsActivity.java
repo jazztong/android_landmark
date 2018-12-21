@@ -23,6 +23,14 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import com.amazonaws.amplify.generated.graphql.CreateLandmarkMutation;
+import com.amazonaws.amplify.generated.graphql.ListLandmarksQuery;
+import com.amazonaws.mobile.config.AWSConfiguration;
+import com.amazonaws.mobileconnectors.appsync.AWSAppSyncClient;
+import com.amazonaws.mobileconnectors.appsync.fetcher.AppSyncResponseFetchers;
+import com.apollographql.apollo.GraphQLCall;
+import com.apollographql.apollo.api.Response;
+import com.apollographql.apollo.exception.ApolloException;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -41,9 +49,15 @@ import com.google.android.gms.tasks.Task;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.annotation.Nonnull;
+
 import models.RemarkModel;
 import models.SignInConstants;
 import models.SignInType;
+import type.CreateLandmarkInput;
+import type.TableIDFilterInput;
+import type.TableLandmarkFilterInput;
+import type.TableStringFilterInput;
 
 public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener, GoogleMap.OnMapLongClickListener {
 
@@ -54,6 +68,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private FusedLocationProviderClient mFusedLocationProviderClient;
     private Location mLastKnownLocation;
     private List<Marker> allMarker = new ArrayList<>();
+    private AWSAppSyncClient mAWSAppSyncClient;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -64,6 +79,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+        //Init appsync client
+        mAWSAppSyncClient = AWSAppSyncClient.builder()
+                .context(getApplicationContext())
+                .awsConfiguration(new AWSConfiguration(getApplicationContext()))
+                .build();
     }
 
 
@@ -164,9 +184,15 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    private void show(String msg) {
+    private void show(final String msg) {
         Log.w(this.getClass().getName(),msg);
-        Toast.makeText(this,msg,Toast.LENGTH_SHORT).show();
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(getApplicationContext(),msg,Toast.LENGTH_SHORT).show();
+            }
+        });
+
     }
 
     @Override
@@ -187,7 +213,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             @Override
             public void onClick(DialogInterface dialog, int i) {
                 LatLng lastLoc = (LatLng) input.getTag();
-                addMarker(lastLoc,getLoginEmail(),input.getText().toString());
+                mutation(lastLoc,getLoginEmail(),input.getText().toString());
             }
         });
         builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
@@ -199,15 +225,87 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         builder.show();
     }
 
-    private void addMarker(LatLng loc, String email, String snippet) {
-        Marker marker = mMap.addMarker(new MarkerOptions()
-                .title(email)
-                .position(loc)
-                .snippet(snippet));
-        allMarker.add(marker);
-        marker.showInfoWindow();
+    private void addMarker(final LatLng loc, final String email,final String snippet) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Marker marker = mMap.addMarker(new MarkerOptions()
+                        .title(email)
+                        .position(loc)
+                        .snippet(snippet));
+                allMarker.add(marker);
+                marker.showInfoWindow();
+            }
+        });
+
     }
 
+    private void query(String comment){
+        TableLandmarkFilterInput filterInput = TableLandmarkFilterInput.builder()
+                .comment(TableStringFilterInput.builder()
+                        .contains(comment)
+                        .build())
+                .build();
+        mAWSAppSyncClient.query(ListLandmarksQuery.builder().filter(filterInput).build())
+                .responseFetcher(AppSyncResponseFetchers.NETWORK_FIRST)
+                .enqueue(queryCallback);
+    }
+    private GraphQLCall.Callback<ListLandmarksQuery.Data> queryCallback = new GraphQLCall.Callback<ListLandmarksQuery.Data>() {
+        @Override
+        public void onResponse(@Nonnull Response<ListLandmarksQuery.Data> response) {
+            //show(response.data().listLandmarks().toString());
+            if(!response.data().listLandmarks().items().isEmpty()){
+                clearMarker();
+                for(ListLandmarksQuery.Item i: response.data().listLandmarks().items()){
+                    addMarker(new LatLng(i.lat(),i.lng()),i.email(),i.comment());
+                }
+                moveToMarkerCenter();
+            }else {
+                show("Sorry please try again");
+            }
+        }
+
+        @Override
+        public void onFailure(@Nonnull ApolloException e) {
+            show(e.getMessage());
+        }
+    };
+
+    private void clearMarker() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                for (Marker marker : allMarker) {
+                    marker.remove();
+                }
+            }
+        });
+    }
+
+    private void mutation(LatLng location, String user, String comment) {
+        CreateLandmarkInput input = CreateLandmarkInput.builder()
+                .comment(comment)
+                .lat(location.latitude)
+                .lng(location.longitude)
+                .email(user)
+                .build();
+
+        mAWSAppSyncClient.mutate(CreateLandmarkMutation.builder().input(input).build())
+                .enqueue(mutationCallback);
+    }
+
+    private GraphQLCall.Callback<CreateLandmarkMutation.Data> mutationCallback = new GraphQLCall.Callback<CreateLandmarkMutation.Data>() {
+        @Override
+        public void onResponse(@Nonnull Response<CreateLandmarkMutation.Data> response) {
+            CreateLandmarkMutation.CreateLandmark data = response.data().createLandmark();
+            addMarker(new LatLng(data.lat(),data.lng()),data.email(),data.comment());
+        }
+
+        @Override
+        public void onFailure(@Nonnull ApolloException e) {
+            show(e.getMessage());
+        }
+    };
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         mLocationPermissionGranted = false;
@@ -223,28 +321,23 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     public void onMapSearch(View v) {
         String searchInput = getSearchInput();
-        //query server return list of destination
-        //clear and add marker
-        RemarkModel[] searchResult = getSearchResult();
-        for (Marker marker : allMarker) {
-            marker.remove();
-        }
-        if(searchResult.length>0){
-            for (RemarkModel o : searchResult) {
-                addMarker(o.getLatLng(),o.getEmail(),o.getRemark());
-            }
-            moveToMarkerCenter();
-        }
+        query(searchInput);
     }
 
     private void moveToMarkerCenter() {
-        LatLngBounds.Builder builder = new LatLngBounds.Builder();
-        for (Marker marker : allMarker) {
-            builder.include(marker.getPosition());
-        }
-        LatLngBounds bounds = builder.build();
-        int padding = 0;
-        mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds,padding));
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                LatLngBounds.Builder builder = new LatLngBounds.Builder();
+                for (Marker marker : allMarker) {
+                    builder.include(marker.getPosition());
+                }
+                LatLngBounds bounds = builder.build();
+                int padding = 0;
+                mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds,padding));
+            }
+        });
+
     }
 
     private RemarkModel[] getSearchResult() {

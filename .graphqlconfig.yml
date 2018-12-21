@@ -1,0 +1,17 @@
+projects:
+  LandmarkApp:
+    schemaPath: app/src/main/graphql/schema.json
+    includes:
+      - app/src/main/graphql/**/*.graphql
+    excludes:
+      - ./amplify/**
+    extensions:
+      amplify:
+        graphQLApiId: 3bwbxyssuzctfcefjx5p6z6boq
+        codeGenTarget: ''
+        generatedFileName: ''
+        docsFilePath: app/src/main/graphql/com/amazonaws/amplify/generated/graphql
+        region: ap-southeast-2
+      endpoints:
+        prod: >-
+          https://2a6alxrscjcmhj2dsyfcawf5my.appsync-api.ap-southeast-2.amazonaws.com/graphql
