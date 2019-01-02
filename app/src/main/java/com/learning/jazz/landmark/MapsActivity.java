@@ -6,6 +6,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.hardware.Camera;
 import android.location.Location;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
@@ -22,6 +23,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
+import android.widget.ZoomControls;
 
 import com.amazonaws.amplify.generated.graphql.CreateLandmarkMutation;
 import com.amazonaws.amplify.generated.graphql.ListLandmarksQuery;
@@ -39,6 +41,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
@@ -241,10 +244,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void query(String comment){
+        if(comment.isEmpty()){
+            show("Please fill in your search query.");
+            return;
+        }
         TableLandmarkFilterInput filterInput = TableLandmarkFilterInput.builder()
-                .comment(TableStringFilterInput.builder()
-                        .contains(comment)
-                        .build())
+                .comment(TableStringFilterInput.builder().contains(comment).build())
                 .build();
         mAWSAppSyncClient.query(ListLandmarksQuery.builder().filter(filterInput).build())
                 .responseFetcher(AppSyncResponseFetchers.NETWORK_FIRST)
@@ -253,9 +258,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private GraphQLCall.Callback<ListLandmarksQuery.Data> queryCallback = new GraphQLCall.Callback<ListLandmarksQuery.Data>() {
         @Override
         public void onResponse(@Nonnull Response<ListLandmarksQuery.Data> response) {
-            //show(response.data().listLandmarks().toString());
+            clearMarker();
             if(!response.data().listLandmarks().items().isEmpty()){
-                clearMarker();
                 for(ListLandmarksQuery.Item i: response.data().listLandmarks().items()){
                     addMarker(new LatLng(i.lat(),i.lng()),i.email(),i.comment());
                 }
@@ -275,9 +279,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                for (Marker marker : allMarker) {
-                    marker.remove();
-                }
+                mMap.clear();
             }
         });
     }
@@ -328,13 +330,22 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                LatLngBounds.Builder builder = new LatLngBounds.Builder();
-                for (Marker marker : allMarker) {
-                    builder.include(marker.getPosition());
+                if(allMarker.size() >1 ){
+                    LatLngBounds.Builder builder = new LatLngBounds.Builder();
+                    for (Marker marker : allMarker) {
+                        builder.include(marker.getPosition());
+                    }
+                    LatLngBounds bounds = builder.build();
+                    int padding = 100;
+                    mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds,padding));
+                }else if(allMarker.size() == 1){
+                    final CameraPosition cameraPosition = new CameraPosition.Builder().target(allMarker.get(0).getPosition())
+                            .zoom(15)
+                            .bearing(0)
+                            .tilt(0)
+                            .build();
+                    mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
                 }
-                LatLngBounds bounds = builder.build();
-                int padding = 0;
-                mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds,padding));
             }
         });
 
