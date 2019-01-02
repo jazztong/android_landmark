@@ -368,4 +368,9 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onMapLongClick(LatLng latLng) {
         showRemarkInput(latLng);
     }
+
+    @Override
+    public void onBackPressed() {
+        signOut();
+    }
 }

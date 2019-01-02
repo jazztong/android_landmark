@@ -125,4 +125,10 @@ public class SignInActivity extends AppCompatActivity implements View.OnClickLis
         Log.w(name,msg);
         Toast.makeText(this,msg,Toast.LENGTH_SHORT).show();
     }
+
+    @Override
+    public void onBackPressed() {
+        finish();
+        moveTaskToBack(true);
+    }
 }
