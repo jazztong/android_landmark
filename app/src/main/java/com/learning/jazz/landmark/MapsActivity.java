@@ -351,13 +351,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     }
 
-    private RemarkModel[] getSearchResult() {
-        return new RemarkModel[]{
-            new RemarkModel("abc@email.com","something",new LatLng(12,20)),
-            new RemarkModel("abcd@email.com","ffsomething",new LatLng(15,27)),
-            new RemarkModel("abc3@email.com","sodfdmething",new LatLng(52,80)),
-        };
-    }
 
     private String getSearchInput() {
         EditText text = findViewById(R.id.editText_search);
